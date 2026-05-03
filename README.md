@@ -1,134 +1,133 @@
-# HackerRank Orchestrate
+# Support Triage Agent
 
-Starter repository for the **HackerRank Orchestrate** 24-hour hackathon (May 1–2, 2026).
+This folder contains a terminal-based support triage agent built for a hackathon-style challenge.
+It processes incoming support tickets and generates grounded responses using a local knowledge base of Markdown articles.
 
-Build a terminal-based AI agent that triages real support tickets across three product ecosystems; **HackerRank**, **Claude**, and **Visa** — using only the support corpus shipped in this repo.
+## Project Overview
 
-Read [`problem_statement.md`](./problem_statement.md) for the full task spec, input/output schema, and allowed values, and [`evalutation_criteria.md`](./evalutation_criteria.md) for how submissions are scored.
+The agent supports three product domains:
+- `HackerRank` — hiring and coding assessment platform
+- `Claude` — Anthropic AI assistant and API support
+- `Visa` — global payment network and card support
 
----
+It is designed to:
+- classify each ticket into a product domain and intent
+- determine whether a ticket can be answered automatically or should be escalated
+- retrieve relevant content from a local Markdown corpus using TF-IDF
+- generate a strict, grounded response using Anthropic Claude
+- avoid hallucination by forcing answers only from the corpus
 
-## Contents
+## Files in this folder
 
-1. [Repository layout](#repository-layout)
-2. [What you need to build](#what-you-need-to-build)
-3. [Where your code goes](#where-your-code-goes)
-4. [Quickstart](#quickstart)
-5. [Chat transcript logging](#chat-transcript-logging)
-6. [Submission](#submission)
-7. [Judge interview](#judge-interview)
-8. [Evaluation criteria](#evaluation-criteria)
+- `main.py` — main application and triage pipeline
+- `README.md` — this documentation
+- `__pycache__/` — compiled Python cache files
 
----
+## How it works
 
-## Repository layout
+Main pipeline steps:
+1. Load corpus files from `data/hackerrank/`, `data/claude/`, and `data/visa/`.
+2. Convert Markdown into plain text and split it into overlapping chunks.
+3. Build a low-memory TF-IDF index over the chunks.
+4. For each support ticket:
+   - run a hard safety check for prompt injection or harmful content
+   - classify the ticket into domain, intent, product area, request type, and escalation decision
+   - if safe and not escalated, retrieve relevant corpus chunks
+   - generate a grounded JSON response using Anthropic Claude
+5. Write results to a CSV and save a transcript log.
 
-```
-.
-├── AGENTS.md                       # Rules for AI coding tools + transcript logging
-├── problem_statement.md            # Full task description and I/O schema
-├── README.md                       # You are here
-├── code/                           # ← Build your agent here
-│   └── main.py                     #   Entry point (rename/extend as you like)
-├── data/                           # Local-only support corpus (no network needed)
-│   ├── hackerrank/                 #   HackerRank help center
-│   ├── claude/                     #   Claude Help Center export
-│   └── visa/                       #   Visa consumer + small-business support
-└── support_issues/
-    ├── sample_support_issues.csv   # Inputs + expected outputs (for development)
-    ├── support_issues.csv          # Inputs only (run your agent on these)
-    └── output.csv                  # Write your agent's predictions here
-```
+## Requirements
 
----
+Dependencies are tracked in the repository root `requirements.txt`:
+- `anthropic>=0.25.0`
 
-## What you need to build
+Python environment requirements:
+- Python 3.11+ is recommended
+- `ANTHROPIC_API_KEY` environment variable must be set before running
 
-A terminal-based agent that, for each row in `support_issues/support_issues.csv`, produces:
+## Configuration
 
-| Column         | Allowed values                                          |
-| -------------- | ------------------------------------------------------- |
-| `status`       | `replied`, `escalated`                                  |
-| `product_area` | most relevant support category / domain area            |
-| `response`     | user-facing answer grounded in the provided corpus      |
-| `justification`| concise explanation of the routing/answering decision   |
-| `request_type` | `product_issue`, `feature_request`, `bug`, `invalid`    |
+Key constants in `main.py`:
+- `MODEL` — Claude model name used for classification and response generation
+- `CORPUS_DIRS` — local domains under `data/`
+- `INPUT_CSV` / `OUTPUT_CSV` — default ticket input and output paths
+- `CHUNK_SIZE` / `CHUNK_OVERLAP` — corpus chunking settings
+- `TOP_K` — number of chunks retrieved per ticket
+- `STOP_WORDS` — used by TF-IDF tokenizer
 
-Hard requirements (from `problem_statement.md`):
+## Data expectations
 
-- Must be **terminal-based**.
-- Must use **only the provided support corpus** (no live web calls for ground-truth answers).
-- Must **escalate** high-risk, sensitive, or unsupported cases instead of guessing.
-- Must avoid hallucinated policies or unsupported claims.
+The project expects:
+- `data/hackerrank/` — HackerRank markdown knowledge base
+- `data/claude/` — Claude markdown knowledge base
+- `data/visa/` — Visa markdown knowledge base
+- `support_tickets/support_tickets.csv` — incoming ticket list
 
-Beyond that you are free to bring your own approach — RAG, vector DBs, tool use, structured output, agent frameworks, classical ML, or anything else.
+The ticket CSV should contain columns like:
+- `Issue`
+- `Subject`
+- `Company`
 
----
+## Running the agent
 
-## Where your code goes
-
-All of your work belongs in [`code/`](./code/). The repo ships with an empty `code/main.py` you can grow into your full agent — add more modules (`agent.py`, `retriever.py`, `classifier.py`, etc.) next to it as needed.
-
-Conventions:
-
-- Put a **README inside `code/`** describing how to install dependencies and run your agent.
-- Read secrets **from environment variables only** (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, …). Copy `.env.example` → `.env` (already gitignored) if you keep one. **Never hardcode keys.**
-- Be **deterministic** where possible. Seed any random sampling.
-- Write responses to `support_issues/output.csv`.
-
----
-
-## Quickstart
-
-Clone this repository:
+From the `code/` folder or repository root, run:
 
 ```bash
-git clone git@github.com:interviewstreet/hackerrank-orchestrate-may26.git
-cd hackerrank-orchestrate-may26
+# with the local Anthropic API key set
+python main.py
 ```
 
-You are free to use any language or runtime. We recommend **Python**, **JavaScript**, or **TypeScript**.
+Optional flags:
 
----
+```bash
+python main.py --dry-run
+python main.py --input support_tickets/sample_support_tickets.csv --output support_tickets/output.csv
+```
 
-## Chat transcript logging
+The agent prints ticket summaries to the terminal and writes `output.csv` with these fields:
+- `issue`
+- `subject`
+- `company`
+- `response`
+- `product_area`
+- `status`
+- `request_type`
+- `justification`
 
-This repo ships with an `AGENTS.md` that any modern AI coding tool (Cursor, Claude Code, Codex, Gemini CLI, Copilot, etc.) will read. It instructs the tool to append every conversation turn to a single shared log file:
+## Safety and grounding
 
-| Platform       | Path                                              |
-| -------------- | ------------------------------------------------- |
-| macOS / Linux  | `$HOME/hackerrank_orchestrate/log.txt`            |
-| Windows        | `%USERPROFILE%\hackerrank_orchestrate\log.txt`    |
+`main.py` enforces strong guardrails:
+- hard safety checks reject prompt injection or explicit harmful requests
+- classifier decides whether a ticket should be escalated
+- response generation is told to use only provided reference articles
+- out-of-scope tickets receive a safe fallback reply
+- no emails, phone numbers, URLs, or contact details are invented
 
-You don't need to do anything to enable it — just use your AI tool normally. You'll upload this `log.txt` as your chat transcript at submission time.
+## Code structure
 
----
+Sections in `main.py`:
+- Section 1: Configuration constants
+- Section 2: Logging and transcript utilities
+- Section 3: Corpus loader and Markdown cleaner
+- Section 4: TF-IDF retrieval index and scoring
+- Section 5: Safety gate rules
+- Section 6: Ticket classifier prompt and logic
+- Section 7: Response generation prompt and logic
+- Section 8: Ticket processing pipeline
+- Section 9: CLI entrypoint and CSV I/O
 
-## Submission
+## Usage notes
 
-Submit on the HackerRank Community Platform:
-<https://www.hackerrank.com/contests/hackerrank-orchestrate-may26/challenges/support-agent/submission>
+- This project is built to operate on the local corpus only; it does not use external search engines.
+- The agent is intentionally conservative: if the corpus does not support an answer, it returns an out-of-scope fallback.
+- The response generator asks Claude for JSON output only, reducing free-form answer risk.
 
-You will upload **three** files:
+## Troubleshooting
 
-1. **Code zip** — zip your `code/` directory and upload it. Exclude virtualenvs, `node_modules`, build artifacts, the `data/` corpus, and the `support_issues/` CSVs.
-2. **Predictions CSV** — your agent's output for `support_issues/support_issues.csv` (i.e. the populated `output.csv`).
-3. **Chat transcript** — the `log.txt` from the path in [Chat transcript logging](#chat-transcript-logging).
+- If `ANTHROPIC_API_KEY` is missing, the script exits immediately.
+- If corpus folders are missing or no Markdown is loaded, the script exits with an error.
+- If the classifier or response generator fails, a safe escalation or fallback is used.
 
----
+## Notes
 
-## Judge interview
-
-After a successful submission, your AI Judge interview will happen within a few hours after the hackathon ends. It will stay open for the next 4 hours. 
-
-The AI Judge will have access to your submission and may ask about your approach, decisions, and how you used AI while building your solution. The interview will be 30 minutes long, and keeping your camera on is mandatory.
-
-Results will be announced on May 15, 2026
-
----
-
-## Evaluation criteria
-
-Submissions are scored across four dimensions: agent design (your `code/`), the AI Judge interview, output accuracy on `support_issues/output.csv`, and AI fluency from your chat transcript.
-
-See [`evalutation_criteria.md`](./evalutation_criteria.md) for the full rubric.
+This project is tailored for the provided hackathon corpus and support ticket workflow. The code is optimized for clarity and correctness over production-grade scaling.
